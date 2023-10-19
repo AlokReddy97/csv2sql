@@ -130,7 +130,9 @@ def process_csv_file(filename, n=4):
     if not os.path.isfile(filename):
         print(f"Error: File '{filename}' does not exist")
         return
-    
+    print("In process csv file")
+    print(filename)
+    print("*************************")
     # Open the file
     with open(filename, 'r') as file:
         # Initialize variables to store the maximum column count and the rows with that count
@@ -164,7 +166,8 @@ def process_csv_file(filename, n=4):
         os.makedirs(f'processed/{foldername}')
 
     processed_filename = f'processed/{foldername}/{os.path.splitext(filename)[0]}_{timestamp}.csv'
-
+    print(processed_filename)
+    print("________________________")
     with open(processed_filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, quoting=csv.QUOTE_ALL)
         with open(filename, 'r') as file1:
@@ -217,6 +220,8 @@ if len(sys.argv) >= 3:
 if len(sys.argv) >= 4:
     num_lines = int(sys.argv[3])
 
+
+
 def convert_to_csv(filename):
     # Check if the file exists
     filename = filename.lower()
@@ -232,42 +237,139 @@ def convert_to_csv(filename):
     
     # Read the file based on its extension
     try:
-        if file_extension in ['.xls', '.xlsx']:
+        if file_extension in ['.xls']:
             with open(filename, 'rb') as file:
-                df_list = pd.read_html(file, skiprows=[0])
+                df_list = pd.read_html(file, skiprows=[0], header=0)
                 df = pd.DataFrame(df_list[0])
+                print(df)
+        elif file_extension in ['.xlsx']:
+            df = pd.read_excel(filename)
         elif file_extension == '.csv':
-            df = pd.read_csv(filename)
+            # Try reading with multiple encodings
+            encodings_to_try = ['utf-8','ISO-8859-1']
+            for encoding in encodings_to_try:
+                try:
+                    df = pd.read_csv(filename, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                print(f"Error: Failed to read the file with all supported encodings.")
+                df = pd.DataFrame()  # Return an empty DataFrame in case of error
         else:
             print(f"Error: Unsupported file format '{file_extension}'.")
             return
     except Exception as e:
-        print(f"Error: Failed to read the file. {str(e)}")
-        return
+        print(f"Error: {str(e)}")
+        df = pd.DataFrame()  # Return an empty DataFrame in case of error
     
     # Create the output CSV filename
     output_filename = f"{os.path.splitext(filename)[0]}.csv"
     
-    # Save the DataFrame to CSV
+    # Save the DataFrame to CSV with headers and without the index
     df.to_csv(output_filename, index=False)
     
     print(f"File '{filename}' converted to CSV and saved as '{output_filename}'.")
 
     return output_filename
 
+import re
+import pandas as pd
+import csv
+
+def extract_term_from_filename(filename):
+    # Define the regex pattern to match last 6 characters as digits
+    regex_pattern = r'.*_(\d{6})\.csv'
+
+    # Search for the pattern in the filename
+    match = re.match(regex_pattern, filename)
+
+    if match:
+        term_value = match.group(1)
+        year = term_value[:4]
+        term_code = term_value[4:]
+
+        # Convert the term code to the corresponding term name
+        if term_code == "30":
+            term = "Spring"
+        elif term_code == "40":
+            term = "Summer"
+        elif term_code == "50":
+            term = "Fall"
+        else:
+            print("Invalid filename. The term code should be 30, 40, or 50.")
+            return None
+
+        term_value = f"{term} {year}"
+        return term_value
+    else:
+        print("Invalid filename. Please use a valid filename pattern with last 6 characters as digits (e.g., filename_201030.csv).")
+        return None
+
+def add_term_column_based_on_filename(filename):
+    # Extract the term value from the filename
+    term_value = extract_term_from_filename(filename)
+
+    if term_value is None:
+        return None
+
+    # Read the CSV file into a pandas DataFrame
+    df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
+
+    # Add a new column "term" with the term_value to all rows
+    df["term"] = term_value
+
+    # Process the DataFrame further if needed
+    # ...
+
+    return df
+
+
+
+
+# Example usage:
+# convert_to_csv('example.xlsx')
+
+
+# Example usage:
+# convert_to_csv('example.xls')
+
+
+# Example usage:
+# convert_to_csv('example.xls')
 
 filename=convert_to_csv(filename)
+print("--------------------------------------------------------------")
+print("After converting to csv file")
+print(filename)
+print("--------------------------------------------------------------")
+processed_df = add_term_column_based_on_filename(filename)
+
+# Save the DataFrame back to a new CSV file if needed
+if processed_df is not None:
+    processed_df.to_csv(filename, index=False)
 
 # filename = 'hr.csv'  # Replace with the actual filename
 # output_filename = 'filtered_rows.csv'  # Replace with the desired output filename
 threshold = 0.03  # Threshold for non-null fields percentage
-
+print(filename)
 filter_csv_rows(filename, filename, threshold)
 
 # Process the specified CSV file
 # trimcsv(filename, num_lines)
-
+print("--------------------------------------------------------------")
 print(f"Updated file saved as {filename}.")
+print("After filtering minimal threshold records")
+print(filename)
+print("--------------------------------------------------------------")
+csv_file_path = filename
+# Read the CSV file and calculate the length of rows
+with open(csv_file_path, 'r', newline='') as csvfile:
+    csvreader = csv.reader(csvfile)
+    rows_to_insert = list(csvreader)
+    total_rows_inserted = len(rows_to_insert)
+print("CSV data processed successfully!")
+print(f"Total rows in the CSV file: {total_rows_inserted}")
 
 # # Print the first 5 lines from the updated CSV file
 # with open(filename, 'r') as f:

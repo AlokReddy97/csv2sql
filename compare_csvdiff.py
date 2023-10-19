@@ -1,3 +1,4 @@
+from cgi import print_arguments
 import os
 import csv
 import subprocess
@@ -57,6 +58,58 @@ def replace_ordinal_numbers(column_name):
     return column_name
 
 
+import pandas as pd
+import re
+
+def extract_term_from_filename(filename):
+    # Define the regex pattern to match last 6 characters as digits
+    regex_pattern = r'.*_(\d{6})\.csv'
+
+    # Search for the pattern in the filename
+    match = re.match(regex_pattern, filename)
+
+    if match:
+        term_value = match.group(1)
+        year = term_value[:4]
+        term_code = term_value[4:]
+
+        # Convert the term code to the corresponding term name
+        if term_code == "30":
+            term = "Spring"
+        elif term_code == "40":
+            term = "Summer"
+        elif term_code == "50":
+            term = "Fall"
+        else:
+            raise ValueError("Invalid filename. The term code should be 30, 40, or 50.")
+        
+        term_value = f"{term} {year}"
+        return term_value
+    else:
+        raise ValueError("Invalid filename. Please use a valid filename pattern with last 6 characters as digits (e.g., filename_201030.csv).")
+
+def add_term_column_based_on_filename(filename):
+    # Extract the term value from the filename
+    term_value = extract_term_from_filename(filename)
+
+    # Read the CSV file into a pandas DataFrame
+    df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
+
+    # Add a new column "term" with the term_value to all rows
+    df["term"] = term_value
+
+    # Process the DataFrame further if needed
+    # ...
+
+    return df
+
+# # Example usage:
+# # Replace "your_file.csv" with the actual file name
+# filename = "your_file.csv"
+# processed_df = add_term_column_based_on_filename(filename)
+
+# # Save the DataFrame back to a new CSV file if needed
+# processed_df.to_csv("output_file.csv", index=False)
 
 
 def compare_csv_files(current_filename):
@@ -133,7 +186,9 @@ def compare_csv_files(current_filename):
 
             headers1_lower=updated_column_names_2
 
-
+            print(headers1_lower)
+            print("-------------------------")
+            print(headers2_lower)
 
             
             if headers1_lower == headers2_lower:

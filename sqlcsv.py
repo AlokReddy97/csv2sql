@@ -151,7 +151,7 @@ def replace_ordinal_numbers(column_name):
 
 
 
-def create_table(filename, no_archive_file=False):
+# def create_table(filename, no_archive_file=False):
     current_file_folder_name = os.path.splitext(filename)[0]
 
     # Set the folder path for the CSV file in the processed folder
@@ -267,171 +267,186 @@ def create_table(filename, no_archive_file=False):
         return False
 
 
+import pandas as pd
+from sqlalchemy import create_engine
+
+def create_table(filename, no_archive_file=False):
+    current_file_folder_name = os.path.splitext(filename)[0]
+
+    # Set the folder path for the CSV file in the processed folder
+    processed_folder = os.path.join('processed', current_file_folder_name)
+    print(f"Processed folder '{processed_folder}'")
+    if not os.path.exists(processed_folder):
+        print(f"No processed folder found for '{filename}'")
+        return
+
+    try:
+        # Get the most recent timestamped CSV file in the processed folder
+        processed_filenames = [f for f in os.listdir(processed_folder) if f.endswith('.csv')]
+        
+        print("Most recently processed csv files")
+        print(processed_filenames)
+        print("------------------------------------------------------------------------------------------------")
+        if not processed_filenames:
+            raise ValueError(f"No processed CSV files found in folder '{processed_folder}'")
+        latest_processed_filename = max(processed_filenames, key=lambda f: os.path.getmtime(os.path.join(processed_folder, f)))
+        processed_filepath = os.path.join(processed_folder, latest_processed_filename)
+        print(processed_filepath)
+
+        # conn = psycopg2.connect(database="db1", user="alok", password="reddy", host="localhost", port="5433")
+        conn = psycopg2.connect(database="meddb", user="alok", password="reddy", host="localhost", port="5432")
+        cur = conn.cursor()
+        if no_archive_file and processed_filepath is not None:
+            with open(processed_filepath, "r") as csvfile:
+                csvreader = csv.reader(csvfile,quoting=csv.QUOTE_ALL, quotechar='"')
+                headers = next(csvreader)
+                headers = [s.strip().replace("'", "") for s in headers]
+                headers = [s.strip().replace("/", "") for s in headers]
+                headers = [s.strip().replace("-", "") for s in headers]
+
+                updated_column_names = [replace_ordinal_numbers(column_name) for column_name in headers]
+                headers = updated_column_names
+                data_types = get_column_data_types(headers, csvreader)
+                # Load CSV data into DataFrame
+                print("iiiiiiiiiiiiiiiiiiiiiiiiiiii")
+                print_column_data_types(headers, data_types)
+                df = pd.read_csv(processed_filepath)
+                table_name = os.path.splitext(latest_processed_filename)[0]
+                table_name = table_name.split('_')[0]
+                print(headers)
+                # Determine the primary key columns
+                pk_columns = get_primary_key_columns(headers)
+
+                # # Create the table using df.to_sql
+                # engine = create_engine('postgresql://alok:reddy@localhost:5432/meddb')
+                # df.to_sql(name=table_name, con=engine, if_exists='replace', index=False)
+
+                print(f"Table '{table_name}' creation in progress")
+
+                # Insert data into the newly created table
+                insert_data_into_table(processed_filepath,headers, data_types, table_name,pk_columns)
+
+                return True
+        else:
+            print("Archive file is not empty. Table updation is done")
+            with open(processed_filepath, "r") as csvfile:
+                csvreader = csv.reader(csvfile)
+                headers = next(csvreader)
+                headers = [s.strip().replace("'", "") for s in headers]
+                headers = [s.strip().replace("/", "") for s in headers]
+                headers = [s.strip().replace("-", "") for s in headers]
+
+                updated_column_names = [replace_ordinal_numbers(column_name) for column_name in headers]
+                headers = updated_column_names
 
 
-def insert_data_into_table(cur, conn, filename, headers, data_types, table_name):
+                table_name = os.path.splitext(latest_processed_filename)[0]
+                table_name = table_name.split('_')[0]
+                
+
+                print(table_name)
+                # Determine the primary key columns
+                pk_columns = get_primary_key_columns1(cur, conn, table_name)
+                print("The primary columns are :")
+                print(pk_columns)
+                update_records(table_name, pk_columns, processed_filepath,headers)
+                return False
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        return False
+
+
+def insert_data_into_table(filename, headers, data_types, table_name, pk_columns):
     # Convert column names to lower case
+    print("----------------- IN INSERT FUNCTION -----------------")
     headers_lower = [header.lower() for header in headers]
 
-    with open(filename, "r", newline="") as csvfile:
-        csvreader = csv.reader(csvfile, quotechar='"', quoting=csv.QUOTE_ALL)
-        next(csvreader)  # Skip the header row
-        rows_to_insert = []
+    # Read the CSV file into a pandas DataFrame
+    df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
 
-        for row in csvreader:
-            if len(row) > len(headers):
-                row = row[:len(headers)]
-            values = []
+    # Convert data types as needed
+    for i, header in enumerate(headers):
+        if data_types[i] == "INTEGER":
+            df[header] = pd.to_numeric(df[header], errors="coerce")
+        elif data_types[i] == "DECIMAL":
+            df[header] = df[header].replace({"$": "", ",": ""}, regex=True).astype(float)
+    
+    # Replace ordinal numbers in column names
+    df.columns = [replace_ordinal_numbers(col) for col in df.columns]
 
-            for i, value in enumerate(row):
-                if data_types[i] == "INTEGER":
-                    if value.strip() == '':
-                        print(f"Empty string found for INTEGER data type at index {i}. Inserting 0 instead.")
-                        values.append(0)
-                    else:
-                        values.append(int(value))
-                elif data_types[i] == "DECIMAL":
-                    values.append(Decimal(value.replace("$", "").replace(",", "")))
-                else:
-                    values.append(value.replace("(", "").replace(")", ""))
+    # Set the primary key columns if provided
+    if pk_columns:
+        df.set_index(pk_columns, inplace=True)
 
-            rows_to_insert.append(tuple(values))
+    # Replace null values with empty strings
+    df.fillna('', inplace=True)
 
-        insert_query = sql.SQL("INSERT INTO {table} ({columns}) VALUES %s ON CONFLICT DO NOTHING;").format(
-            table=sql.Identifier(table_name),
-            columns=sql.SQL(', ').join(map(sql.Identifier, headers_lower))
-        )
-        print("------------------------------------------------------------------------------------------------")
-        confirm = input("Do you want to insert all rows? Press 1 to confirm, any other key to skip: come---on ")
-        if confirm == "1":
-            try:
-                # print(insert_query)
-                execute_values(cur, insert_query, rows_to_insert, page_size=1000)
-                total_rows_inserted = len(rows_to_insert)  # Get the total number of rows inserted
-                print("CSV data inserted successfully!")
-                print(f"Total rows inserted: {total_rows_inserted}")
-                
-                # Get current timestamp
-                timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    # Create a database connection using SQLAlchemy
+    engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
 
-                # Create archived folder if it doesn't exist
-                if not os.path.exists('archived'):
-                    os.makedirs('archived')
+    # Convert DataFrame to SQL table using pandas with if_exists='replace' or 'append'
+    df.to_sql(table_name, engine, if_exists='replace' if pk_columns else 'append', index=True if pk_columns else False)
 
-                # Create a folder with the name of the CSV file in the archived folder if it doesn't exist
-                foldername = os.path.splitext(os.path.basename(filename))[0]
-                foldername = foldername.split('_')[0]
-                if not os.path.exists(f'archived/{foldername}'):
-                    os.makedirs(f'archived/{foldername}')
+    # Add the primary key if pk_columns are provided
+    if pk_columns:
+        with engine.connect() as con:
+            print("creating primary key")
+            con.execute(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({", ".join(pk_columns)});')
 
-                # Write the SQL table to a CSV file in the archived folder
-                with open(f'archived/{foldername}/{table_name}_{timestamp}.csv', 'w') as csvfile:
-                    csvwriter = csv.writer(csvfile)
-                    csvwriter.writerow(headers_lower)  # Write lower case column names
-                    cur.execute(f"SELECT * FROM {table_name}")
-                    rows = cur.fetchall()
-                    for row in rows:
-                        csvwriter.writerow(row)
+    # Get the number of rows inserted
+    rows_inserted = len(df)
 
-                print(f"CSV file saved in archived/{foldername}/{table_name}_{timestamp}.csv")
-
-                # Print an error message if the CSV file is not archived properly
-                if not os.path.exists(f'archived/{foldername}/{table_name}_{timestamp}.csv'):
-                    print("Error: CSV file not archived properly")
-
-            except Exception as e:
-                print("Error occurred while inserting CSV data into the table:", e)
-                print(cur.statusmessage)
-        else:
-            print("Aborted Insertion")
-            return False
-
-        # Commit the changes and close the cursor and connection
-        conn.commit()
-        cur.close()
-        conn.close()
+    # Print the total number of rows inserted
+    print(f"CSV data inserted successfully!")
+    print(f"Total rows inserted: {rows_inserted}")
+    
+    # Archive the CSV file
+    archive_csv_file(filename, table_name, headers_lower)
 
 
+import pandas as pd
+from sqlalchemy import create_engine, MetaData, Table, Column, String
+from sqlalchemy.dialects.postgresql import insert
 
-def update_records(cur, conn, table_name, pk_columns, csv_file_path, data_types=None):
-    # Open CSV file
-    with open(csv_file_path, 'r') as csv_file:
-        csv_reader = csv.reader(csv_file)
+def update_records(table_name, pk_columns, csv_file_path, headers):
+    print("----------------- IN UPDATE FUNCTION -----------------")
+    # Read the CSV file into a pandas DataFrame
+    df = pd.read_csv(csv_file_path)
 
-        # Initialize counters for rows updated and inserted
-        rows_updated = 0
-        rows_inserted = 0
-        conflicting_records = []
+    # Convert DataFrame columns to lowercase
+    df.columns = df.columns.str.lower()
 
-        # Get header row
-        headers = next(csv_reader)
+    # Replace ordinal numbers in column names
+    df.columns = [replace_ordinal_numbers(col) for col in df.columns]
+    # print(df)
+    # Create a database connection using SQLAlchemy
+    engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
 
-        updated_column_names = []
-        for column_name in headers:
-            updated_column_name = replace_ordinal_numbers(column_name)
-            updated_column_names.append(updated_column_name)
-        headers=updated_column_names        
+    # Define the table object using SQLAlchemy
+    metadata = MetaData()
+    table = Table(table_name, metadata, *[
+        Column(col, String) for col in df.columns
+    ])
 
-        # Loop through each row in the CSV file
-        for row in csv_reader:
-            # Build SQL query to update record based on primary key columns
-            query = sql.SQL("INSERT INTO {table} ({columns}) VALUES ({values}) ON CONFLICT ({conflict_columns}) DO NOTHING RETURNING *;").format(
-                table=sql.Identifier(table_name),
-                columns=sql.SQL(', ').join(map(sql.Identifier, headers)),
-                values=sql.SQL(', ').join([sql.Placeholder()] * len(headers)),
-                conflict_columns=sql.SQL(', ').join(map(sql.Identifier, pk_columns))
-            )
+    # Define the insert statement using the table object
+    stmt = insert(table).values(df.to_dict(orient='records'))
 
-            # Prepare the values with appropriate data types
-            values = []
-            for i, value in enumerate(row):
-                column = headers[i]
-                if data_types and column in data_types and data_types[column] is not None:
-                    # If data type is specified, cast the value accordingly
-                    values.append(sql.SQL("%s::{}").format(sql.Identifier(data_types[column])).as_string(cur) % value)
-                else:
-                    # Otherwise, use the value as is
-                    values.append(value)
+    # print(stmt)
+    # Specify the conflict resolution for duplicate primary keys
+    on_conflict = stmt.on_conflict_do_nothing(index_elements=pk_columns)
 
-            try:
-                cur.execute(query, values)
-                if cur.rowcount == 0:
-                    conflicting_records.append(row)
-                else:
-                    rows_inserted += 1
-            except psycopg2.IntegrityError:
-                conflicting_records.append(row)
-            else:
-                rows_updated += 1
-
-        print(f"{rows_updated} rows updated and {rows_inserted} rows inserted.")
-
-        if conflicting_records:
-            print(f"{len(conflicting_records)} conflicting records:")
-            for record in conflicting_records:
-                print(record)
+    try:
+        # Execute the insert statement with conflict resolution
+        engine.execute(on_conflict)
+            # Archive the CSV file
+        archive_csv_file(csv_file_path, table_name, headers)
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        
 
 
-            print(f"{len(conflicting_records)} conflicting records:")
-            # Ask for confirmation before pushing conflicting records
-            confirmation = input("Do you want to push the conflicting records to the database? (yes/no): ")
-            if confirmation.lower() == "yes":
-                # Push conflicting records to the database
-                for record in conflicting_records:
-                    try:
-                        cur.execute(query, record)
-                        rows_inserted += 1
-                    except psycopg2.IntegrityError:
-                        print(f"Failed to insert conflicting record: {record}")
-                    else:
-                        rows_updated += 1
-                print("Conflicting records inserted.")
-            else:
-                print("Conflicting records not pushed to the database.")
 
-    # Commit changes
-    conn.commit()
-
+def archive_csv_file(csv_file_path, table_name, headers_lower):
     # Get current timestamp
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 
@@ -441,23 +456,21 @@ def update_records(cur, conn, table_name, pk_columns, csv_file_path, data_types=
 
     # Create a folder with the name of the CSV file in the archived folder if it doesn't exist
     foldername = os.path.splitext(os.path.basename(csv_file_path))[0]
+    foldername = foldername.split('_')[0]
     if not os.path.exists(f'archived/{foldername}'):
         os.makedirs(f'archived/{foldername}')
 
     # Write the SQL table to a CSV file in the archived folder
+    engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
     with open(f'archived/{foldername}/{table_name}_{timestamp}.csv', 'w') as csvfile:
         csvwriter = csv.writer(csvfile)
-        cur.execute(f"SELECT * FROM {table_name}")
-        rows = cur.fetchall()
-        for row in rows:
-            csvwriter.writerow(row)
+        csvwriter.writerow(headers_lower)  # Write lower case column names
+        with engine.begin() as conn:
+            result = conn.execute(f"SELECT * FROM {table_name}")
+            for row in result:
+                csvwriter.writerow(row)
 
-    print(f"CSV file saved in archived/{foldername}/{table_name}_{timestamp}.csv from update_records.")
-
-    # Close cursor and connection
-    cur.close()
-    conn.close()
-
+    print(f"CSV file saved in archived/{foldername}/{table_name}_{timestamp}.csv")
 
 
 
