@@ -99,7 +99,8 @@ To set up the environment for running the `csv2sql.py` script, follow these step
 2. Run the command below for SQL table creation and insertion:
    - Command for CSV: `python3 csv2sql.py filename.csv`
    - Command for Excel: `python3 csv2sql.py filename.xls` or `python3 csv2sql.py filename.xlsx`
-
+   - Command for multiple Excel files in same folder: python3 final.py .
+     
 For example: `python3 make_trimmedcsv.py publications.csv`
 
 3. HTML to CSV:
