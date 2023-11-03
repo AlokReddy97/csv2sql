@@ -356,53 +356,107 @@ def create_table(filename, no_archive_file=False):
         return False
 
 
+# def insert_data_into_table(filename, headers, data_types, table_name, pk_columns):
+#     # Convert column names to lower case
+#     print("----------------- IN INSERT FUNCTION -----------------")
+#     headers_lower = [header.lower() for header in headers]
+
+#     # Read the CSV file into a pandas DataFrame
+#     df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
+
+#     # Convert data types as needed
+#     for i, header in enumerate(headers):
+#         if data_types[i] == "INTEGER":
+#             df[header] = pd.to_numeric(df[header], errors="coerce")
+#         elif data_types[i] == "DECIMAL":
+#             df[header] = df[header].replace({"$": "", ",": ""}, regex=True).astype(float)
+    
+#     # Replace ordinal numbers in column names
+#     df.columns = [replace_ordinal_numbers(col) for col in df.columns]
+
+#     # Set the primary key columns if provided
+#     if pk_columns:
+#         df.set_index(pk_columns, inplace=True)
+
+#     # Replace null values with empty strings
+#     df.fillna('', inplace=True)
+
+#     # Create a database connection using SQLAlchemy
+#     engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
+
+#     # Convert DataFrame to SQL table using pandas with if_exists='replace' or 'append'
+#     df.to_sql(table_name, engine, if_exists='replace' if pk_columns else 'append', index=True if pk_columns else False)
+
+#     # Add the primary key if pk_columns are provided
+#     if pk_columns:
+#         with engine.connect() as con:
+#             print("creating primary key")
+#             con.execute(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({", ".join(pk_columns)});')
+
+#     # Get the number of rows inserted
+#     rows_inserted = len(df)
+
+#     # Print the total number of rows inserted
+#     print(f"CSV data inserted successfully!")
+#     print(f"Total rows inserted: {rows_inserted}")
+    
+#     # Archive the CSV file
+#     archive_csv_file(filename, table_name, headers_lower)
+
+
 def insert_data_into_table(filename, headers, data_types, table_name, pk_columns):
-    # Convert column names to lower case
-    print("----------------- IN INSERT FUNCTION -----------------")
-    headers_lower = [header.lower() for header in headers]
+    try:
+        # Convert column names to lower case
+        headers_lower = [header.lower() for header in headers]
 
-    # Read the CSV file into a pandas DataFrame
-    df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
+        # Read the CSV file into a pandas DataFrame
+        df = pd.read_csv(filename, quotechar='"', quoting=csv.QUOTE_ALL)
 
-    # Convert data types as needed
-    for i, header in enumerate(headers):
-        if data_types[i] == "INTEGER":
-            df[header] = pd.to_numeric(df[header], errors="coerce")
-        elif data_types[i] == "DECIMAL":
-            df[header] = df[header].replace({"$": "", ",": ""}, regex=True).astype(float)
+        # Convert data types as needed
+        for i, header in enumerate(headers):
+            if data_types[i] == "INTEGER":
+                df[header] = pd.to_numeric(df[header], errors="coerce")
+            elif data_types[i] == "DECIMAL":
+                df[header] = df[header].replace({"$": "", ",": ""}, regex=True).astype(float)
+        
+        # Replace ordinal numbers in column names
+        df.columns = [replace_ordinal_numbers(col) for col in df.columns]
+
+        # Set the primary key columns if provided
+        if pk_columns:
+            df.set_index(pk_columns, inplace=True)
+
+        # Replace null values with empty strings
+        df.fillna('', inplace=True)
+
+        # Create a database connection using SQLAlchemy
+        engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
+
+        # Convert DataFrame to SQL table using pandas with if_exists='replace' or 'append'
+        df.to_sql(table_name, engine, if_exists='replace' if pk_columns else 'append', index=True if pk_columns else False)
+
+        # Add the primary key if pk_columns are provided
+        if pk_columns:
+            with engine.connect() as con:
+                con.execute(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({", ".join(pk_columns)});')
+            
+            # Archive the CSV file only if primary key creation is successful
+            archive_csv_file(filename, table_name, headers_lower)
+
+        # Get the number of rows inserted
+        rows_inserted = len(df)
+
+        # Print the total number of rows inserted
+        print(f"CSV data inserted successfully!")
+        print(f"Total rows inserted: {rows_inserted}")
     
-    # Replace ordinal numbers in column names
-    df.columns = [replace_ordinal_numbers(col) for col in df.columns]
-
-    # Set the primary key columns if provided
-    if pk_columns:
-        df.set_index(pk_columns, inplace=True)
-
-    # Replace null values with empty strings
-    df.fillna('', inplace=True)
-
-    # Create a database connection using SQLAlchemy
-    engine = create_engine("postgresql://alok:reddy@localhost:5432/meddb")
-
-    # Convert DataFrame to SQL table using pandas with if_exists='replace' or 'append'
-    df.to_sql(table_name, engine, if_exists='replace' if pk_columns else 'append', index=True if pk_columns else False)
-
-    # Add the primary key if pk_columns are provided
-    if pk_columns:
+    except Exception as e:
+        print(f"Error occurred: {str(e)}")
+        # If an error occurs, drop the table and delete records
         with engine.connect() as con:
-            print("creating primary key")
-            con.execute(f'ALTER TABLE "{table_name}" ADD PRIMARY KEY ({", ".join(pk_columns)});')
+            con.execute(f'DROP TABLE IF EXISTS "{table_name}";')
 
-    # Get the number of rows inserted
-    rows_inserted = len(df)
-
-    # Print the total number of rows inserted
-    print(f"CSV data inserted successfully!")
-    print(f"Total rows inserted: {rows_inserted}")
-    
-    # Archive the CSV file
-    archive_csv_file(filename, table_name, headers_lower)
-
+        print(f"Table '{table_name}' dropped, and all records deleted.")
 
 import pandas as pd
 from sqlalchemy import create_engine, MetaData, Table, Column, String
