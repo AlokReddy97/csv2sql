@@ -8,8 +8,8 @@ def run_csv2sql_for_folder(folder_path):
 
     # Loop through each file in the folder
     for file in files:
-        # Check if the file has the ".xls" extension
-        if file.lower().endswith(".xls"):
+        # Check if the file has either the ".xls" or ".csv" extension
+        if file.lower().endswith((".xls", ".xlsx", ".csv")):
             # Build the command to run the script for each file
             command = f"python3 csv2sql.py {os.path.join(folder_path, file)}"
             print(command)
