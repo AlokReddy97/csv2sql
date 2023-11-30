@@ -5,12 +5,13 @@
    - [Sequential Flow Chart](#sequential-flow-chart)
    - [Flow Chart 1](#flow-chart-1)
    - [Flow Chart 2](#flow-chart-2)
-3. [Installation](#installation)
-4. [Step by Step Explanation](#step-by-step-explanation)
-5. [Command to connect the PostgreSQL DB](#command-to-connect-the-postgresql-db)
-6. [Screen Shots of code execution](#screen-shots-of-code-execution)
-7. [Code Explanation](#code-explanation)
-8. [Error Handling](#error-handling)
+3.[System setup](#systemsetup)
+4. [Installation](#installation)
+5. [Step by Step Explanation](#step-by-step-explanation)
+6. [Command to connect the PostgreSQL DB](#command-to-connect-the-postgresql-db)
+7. [Screen Shots of code execution](#screen-shots-of-code-execution)
+8. [Code Explanation](#code-explanation)
+9. [Error Handling](#error-handling)
 
 ## Description <a name="description"></a>
 This repository provides a script (`csv2sql.py`) that facilitates the conversion of CSV or Excel files to PostgreSQL database tables. The script performs data processing, cleaning, table creation, and data insertion/updation.
@@ -31,6 +32,30 @@ This flow chart explains the initial process of processing a file to remove nois
 ![Flow Chart 2](images/Flowchart2.png)
 <p align="center"><b>SQL table creation and data insertion</b></p>
 This flow chart builds upon the first flow chart and provides a detailed explanation of SQL table creation, insertion, and updation. It automatically determines the data types of the columns based on the first 100 rows. User input is required to select the primary key columns. If an archive file exists, the SQL table is updated; otherwise, a new table is created.
+
+### System setup for windows <a name="systemsetup"></a>
+
+Set the postgresql path if not already present in environment variables 
+
+The path genrally will be as below
+
+C:\Program Files\PostgreSQL\15\bin
+
+https://www.commandprompt.com/education/how-to-set-windows-path-for-postgres-tools/
+
+For windows systems
+
+To set up the environment for running the `csv2sql.py` script, follow these steps:
+
+1. psql -U postgres
+2. CREATE USER alok WITH PASSWORD 'reddy';
+3. ALTER USER alok WITH PASSWORD 'reddy';
+4. CREATE DATABASE meddb OWNER alok;
+5. GRANT ALL PRIVILEGES ON DATABASE meddb TO alok;
+
+
+
+
 
 ## Installation for sudo users<a name="installation"></a>
 
@@ -62,25 +87,9 @@ To set up the environment for running the `csv2sql.py` script, follow these step
    - `python3 csv2sql.py filename.csv` (for CSV files)
    - `python3 csv2sql.py filename.xls` (for Excel files)
 
+
+
 ## Installation for substitute users su<a name="installation2"></a>
-
-Set the postgresql path if not already present in environment variables 
-
-The path genrally will be as below
-
-C:\Program Files\PostgreSQL\15\bin
-
-https://www.commandprompt.com/education/how-to-set-windows-path-for-postgres-tools/
-
-For windows systems
-
-To set up the environment for running the `csv2sql.py` script, follow these steps:
-
-1. psql -U postgres
-2. CREATE USER alok WITH PASSWORD 'reddy';
-3. ALTER USER alok WITH PASSWORD 'reddy';
-4. CREATE DATABASE meddb OWNER alok;
-5. GRANT ALL PRIVILEGES ON DATABASE meddb TO alok;
 
 
 
