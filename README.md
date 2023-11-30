@@ -5,7 +5,8 @@
    - [Sequential Flow Chart](#sequential-flow-chart)
    - [Flow Chart 1](#flow-chart-1)
    - [Flow Chart 2](#flow-chart-2)
-3.[System setup](#systemsetup)
+     
+3. [System setup](#systemsetup)
 4. [Installation](#installation)
 5. [Step by Step Explanation](#step-by-step-explanation)
 6. [Command to connect the PostgreSQL DB](#command-to-connect-the-postgresql-db)
